@@ -1,0 +1,25 @@
+configfile: "config/config.yaml"
+
+import pandas as pd
+
+df = pd.read_csv(config["sample_config"])
+
+SAMPLE_NAMES = df["Name"].tolist()
+
+rule fasterq_dump:
+	input:
+		"data/{sample_name}/{sample_name}.sra"	
+	output:
+		"output/{sample_name}/{sample_name}_1.fastq",
+		"output/{sample_name}/{sample_name}_2.fastq"
+	shell:
+		"""
+		mkdir -p output/{wildcards.sample_name};
+		cd output/{wildcards.sample_name};
+		fasterq-dump ../../{input}
+		"""
+
+rule all:
+	input:
+		expand("output/{sample_name}/{sample_name}_1.fastq", sample_name = SAMPLE_NAMES),
+		expand("output/{sample_name}/{sample_name}_2.fastq", sample_name = SAMPLE_NAMES),
