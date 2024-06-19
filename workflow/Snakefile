@@ -10,16 +10,42 @@ rule fasterq_dump:
 	input:
 		"data/{sample_name}/{sample_name}.sra"	
 	output:
-		"output/{sample_name}/{sample_name}_1.fastq",
-		"output/{sample_name}/{sample_name}_2.fastq"
+		"output/fastq/{sample_name}/{sample_name}_1.fastq",
+		"output/fastq/{sample_name}/{sample_name}_2.fastq"
 	shell:
 		"""
-		mkdir -p output/{wildcards.sample_name};
-		cd output/{wildcards.sample_name};
-		fasterq-dump ../../{input}
+		mkdir -p output/fastq/{wildcards.sample_name};
+		cd output/fastq/{wildcards.sample_name};
+		fasterq-dump ../../../{input}
 		"""
 
+rule index_reference:
+	input:
+		config["reference"]
+	output:
+		directory("output/transcriptome_index")
+	conda:
+		"envs/salmon.yaml"
+	shell:
+		"""
+		salmon index -t {input} -i {output} -k 31	
+		"""
+
+rule salmon_quantify:
+	input:
+		fq_1="output/fastq/{sample_name}/{sample_name}_1.fastq",
+		fq_2="output/fastq/{sample_name}/{sample_name}_2.fastq",
+		reference_index="output/transcriptome_index"
+	output:
+		directory("output/salmon/{sample_name}_salmon")
+	conda:
+		"envs/salmon.yaml"
+	shell:
+		"""
+		salmon quant -i {input.reference_index} -l IU -1 {input.fq_1} -2 {input.fq_2} --validateMappings -o {output}	
+		"""
+
+		
 rule all:
 	input:
-		expand("output/{sample_name}/{sample_name}_1.fastq", sample_name = SAMPLE_NAMES),
-		expand("output/{sample_name}/{sample_name}_2.fastq", sample_name = SAMPLE_NAMES),
+		expand("output/salmon/{sample_name}_salmon", sample_name = SAMPLE_NAMES),

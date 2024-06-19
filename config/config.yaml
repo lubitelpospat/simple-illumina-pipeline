@@ -1,1 +1,2 @@
 sample_config: "config/samples.csv"
+reference: "reference/Mus_musculus.GRCm39.cdna.all.fa"
