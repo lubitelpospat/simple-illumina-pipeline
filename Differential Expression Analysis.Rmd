@@ -1,0 +1,150 @@
+---
+title: "Differential Expression Analysis"
+output: html_notebook
+---
+
+# Notebook for differential expression analysis of pig data with assembled transcriptome
+
+```{r loading-libraries}
+suppressMessages(library(DESeq2))
+suppressMessages(library(plotly))
+suppressMessages(require(tidyverse))
+suppressMessages(library(pheatmap))
+library(ensembldb)
+library("pheatmap")
+library(umap)
+library(plotly)
+library(tximport)
+suppressMessages(library("IHW"))
+suppressMessages(library(edgeR))
+suppressPackageStartupMessages(library("tximeta"))
+library("DEGreport")
+library("gplots")
+library("rtracklayer")
+```
+
+
+
+
+# Utilizing tximport pipeline
+
+
+
+```{r preparing-mapping-between-transcripts-and-genes}
+
+gtffile <- "Mus_musculus.GRCm39.111.gtf"
+gtf_df <- as.data.frame(rtracklayer::readGFF(gtffile)) %>% dplyr::filter(type == "transcript")
+tx2gene <- gtf_df[c("transcript_id", "gene_id")]
+colnames(tx2gene) <- c("TXNAME","GENEID")
+head(tx2gene)
+```
+
+## Batch1 analysis
+### map-ont mapping preset
+
+```{r preparing-annotations-for-batch1}
+annotation <- read.csv("salmon_annotation.csv") %>% dplyr::rename(sample_name=Name, group=Condition)
+```
+
+
+```{r importing-batch1-data}
+files <- file.path("salmon", annotation$sample_name, "quant.sf")
+names(files) <- annotation$sample_name
+
+
+
+txi<- tximport(files, type = "salmon", tx2gene = tx2gene,ignoreTxVersion = T)
+
+
+
+```
+#### DESeq2 analysis
+
+```{r batch1-deseq2-analysis}
+coldata<- data.frame(condition=as.factor(annotation$group))
+
+rownames(coldata) <- annotation$sample_name
+
+
+dds <- DESeqDataSetFromTximport(txi,
+                                       colData=coldata,
+                                        design = ~ condition)
+
+
+
+
+
+
+
+cds<- DESeq(dds);
+
+```
+
+
+
+```{r extracting-deseq2-results}
+de_res <- results(cds, filterFun=ihw, alpha = 0.05);
+
+```
+
+
+
+```{r}
+de_res
+```
+
+
+```{r blood1-deseq2-summary}
+summary(de_res)
+```
+
+```{r exporting-results-for-quick-DAVID-analysis}
+de_batch1_blood3.df <- as.data.frame(de_batch1_blood3)
+
+de_batch1_blood3.df <- de_batch1_blood3.df  %>% dplyr::filter(!is.na(padj) )%>% dplyr::filter(padj < 0.1) %>% dplyr::arrange(log2FoldChange)
+
+```
+
+```{r}
+#cat(rownames(de_batch1_blood3.df), sep="\n")
+```
+
+### Retrieving transcripts within differentially expressed genes
+```{r}
+
+```
+
+
+```{r}
+length(intersect(genes_with_novel_transcripts, rownames(de_batch1_blood3.df)))
+```
+
+
+
+```{r}
+select <- rownames(as.data.frame(de_res) %>% dplyr::filter(!is.na(padj))%>% dplyr::filter(padj < 0.05) %>% dplyr::arrange(log2FoldChange))
+df <- as.data.frame(colData(cds)[,"condition"])
+names(df) <- "condition"
+rownames(df) <- colnames(cds)
+df["sums"] <- colSums(counts(cds,normalized=TRUE)[select,])
+df <- df %>% dplyr::arrange(condition, desc(sums)) %>% dplyr::select(condition)
+condition_colour <- list(condition=c(WT="grey", KO="black"))
+pheatmap(t(scale(t(counts(cds,normalized=T))))[select,rownames(df)], cluster_rows=F, show_rownames=FALSE,
+       cluster_cols=F, annotation_col=df, scale="row", annotation_colors = condition_colour, color=bluered(11), annotation_names_col=F,
+      fontsize=10,
+       fontsize_col=8,
+       width=10,
+      cex=1.0,
+      #filename="heatmap.png"
+       )
+
+```
+
+
+
+```{r}
+select <- rownames(as.data.frame(de_res) %>% dplyr::filter(!is.na(padj))%>% dplyr::filter(padj < 0.05))
+
+plotPCA(vst(dds, nsub=10000`), ntop=500)
+
+```
